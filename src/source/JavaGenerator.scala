@@ -20,6 +20,7 @@ import djinni.ast.Record.DerivingType
 import djinni.ast._
 import djinni.generatorTools._
 import djinni.meta._
+import djinni.syntax.Error
 import djinni.writer.IndentWriter
 
 import scala.collection.mutable
@@ -134,43 +135,139 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
       refs.java.add("java.util.concurrent.atomic.AtomicBoolean")
     }
 
+    if (i.ext.react) {
+      refs.java.add("com.facebook.react.bridge.Callback")
+      refs.java.add("com.facebook.react.bridge.Promise")
+      refs.java.add("com.facebook.react.bridge.ReactApplicationContext")
+      refs.java.add("com.facebook.react.bridge.ReactContextBaseJavaModule")
+      refs.java.add("com.facebook.react.bridge.ReactMethod")
+      refs.java.add("com.facebook.react.bridge.ReadableMap")
+      refs.java.add("com.facebook.react.bridge.ReadableArray")
+      refs.java.add("com.facebook.react.bridge.WritableMap")
+      refs.java.add("com.facebook.react.bridge.WritableArray")
+      refs.java.add("com.facebook.react.module.annotations.ReactModule")
+      refs.java.add("com.rushingvise.reactcpp.ReactDjinni")
+      refs.java.add("java.util.Map")
+      refs.java.add("java.util.HashMap")
+    }
+
     writeJavaFile(ident, origin, refs.java, w => {
       val javaClass = marshal.typename(ident, i)
       val typeParamList = javaTypeParams(typeParams)
+      val javaClassType = if (i.ext.react) "final" else "abstract"
+      val javaClassExtends = if (i.ext.react) " extends ReactContextBaseJavaModule" else ""
+
       writeDoc(w, doc)
 
       javaAnnotationHeader.foreach(w.wl)
-      w.w(s"${javaClassAccessModifierString}abstract class $javaClass$typeParamList").braced {
+
+      if (i.ext.react) w.wl(s"""@ReactModule(name = "${javaClass}")""")
+
+      w.w(s"${javaClassAccessModifierString}${javaClassType} class $javaClass$typeParamList$javaClassExtends").braced {
         val skipFirst = SkipFirst()
+
         generateJavaConstants(w, i.consts)
 
         val throwException = spec.javaCppException.fold("")(" throws " + _)
-        for (m <- i.methods if !m.static) {
-          skipFirst { w.wl }
-          writeDoc(w, m.doc)
-          val ret = marshal.returnType(m.ret)
-          val params = m.params.map(p => {
-            val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
-            nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
-          })
-          marshal.nullityAnnotation(m.ret).foreach(w.wl)
-          w.wl("public abstract " + ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + throwException + ";")
-        }
-        for (m <- i.methods if m.static) {
-          skipFirst { w.wl }
-          writeDoc(w, m.doc)
-          val ret = marshal.returnType(m.ret)
-          val params = m.params.map(p => {
-            val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
-            nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
-          })
-          marshal.nullityAnnotation(m.ret).foreach(w.wl)
-          w.wl("public static native "+ ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + ";")
+        if (i.ext.react) {
+          w.wl("private final CppProxy mModule;")
+
+          w.wl
+
+          w.w("public DemoModule(ReactApplicationContext reactContext)").braced {
+            w.wl("super(reactContext);")
+            w.wl(s"mModule = ${react.CONSTRUCTOR_NAME}(ReactDjinni.createReactBridge(reactContext));")
+          }
+
+          w.wl
+          w.wl("@Override")
+          w.w("public String getName()").braced {
+            w.wl(s"""return "${javaClass}";""")
+          }
+
+          if (i.consts.size > 0) {
+            w.wl
+            w.wl("@Override")
+            w.w("public Map<String, Object> getConstants()").braced {
+              w.wl("final Map<String, Object> constants = new HashMap<>();")
+
+              for (c <- i.consts) {
+                w.wl(s"""constants.put("${c.ident.name}", ${c.ident.name});""")
+              }
+
+              w.wl("return constants;")
+            }
+          }
+
+          w.wl
+          w.wl(s"private static native CppProxy ${react.CONSTRUCTOR_NAME}(com.rushingvise.reactcpp.ReactBridge bridge);")
+
+          for (m <- i.methods if !m.static) {
+            w.wl
+            writeDoc(w, m.doc)
+            w.wl("@ReactMethod")
+            val params = m.params.map(p => {
+              var paramType = react.mapJavaParamType(p.ty, marshal)
+              val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+              nullityAnnotation + paramType + " " + idJava.local(p.ident)
+            })
+            marshal.nullityAnnotation(m.ret).foreach(w.wl)
+            val methodName = idJava.method(m.ident)
+            w.w("public void " + methodName + params.mkString("(", ", ", ")") + throwException).braced {
+              var methodCall = "mModule." + methodName + m.params.map(p => {
+                if (react.isReactType(Some(p.ty))) {
+                  s"ReactDjinni.wrap(${idJava.local(p.ident)})"
+                } else if (react.isPrimitive(Some(p.ty))) {
+                  idJava.local(p.ident)
+                } else {
+                  throw Error(m.ident.loc, "Invalid parameter type").toException
+                }
+              }).mkString("(", ", ", ")")
+              if (m.ret.isEmpty) {
+                methodCall = s"$methodCall;"
+              } else if (react.isReactType(m.ret)) {
+                methodCall = s"return ReactDjinni.unwrap($methodCall);"
+              } else if (react.isPrimitive(m.ret)) {
+                methodCall = s"$methodCall;"
+              } else {
+                throw Error(m.ident.loc, "Invalid return type").toException
+              }
+              w.wl(methodCall)
+            }
+          }
+        } else {
+          for (m <- i.methods if !m.static) {
+            skipFirst {
+              w.wl
+            }
+            writeDoc(w, m.doc)
+            val ret = marshal.returnType(m.ret)
+            val params = m.params.map(p => {
+              val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+              nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
+            })
+            marshal.nullityAnnotation(m.ret).foreach(w.wl)
+            w.wl("public abstract " + ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + throwException + ";")
+          }
+          for (m <- i.methods if m.static) {
+            skipFirst {
+              w.wl
+            }
+            writeDoc(w, m.doc)
+            val ret = marshal.returnType(m.ret)
+            val params = m.params.map(p => {
+              val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+              nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
+            })
+            marshal.nullityAnnotation(m.ret).foreach(w.wl)
+            w.wl("public static native " + ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + ";")
+          }
         }
         if (i.ext.cpp) {
           w.wl
           javaAnnotationHeader.foreach(w.wl)
-          w.wl(s"private static final class CppProxy$typeParamList extends $javaClass$typeParamList").braced {
+          val proxyClassExtends = if (i.ext.react) "" else s" extends $javaClass$typeParamList"
+          w.wl(s"private static final class CppProxy$typeParamList$proxyClassExtends").braced {
             w.wl("private final long nativeRef;")
             w.wl("private final AtomicBoolean destroyed = new AtomicBoolean(false);")
             w.wl
@@ -188,6 +285,7 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
               w.wl("destroy();")
               w.wl("super.finalize();")
             }
+
             for (m <- i.methods if !m.static) { // Static methods not in CppProxy
               val ret = marshal.returnType(m.ret)
               val returnStmt = m.ret.fold("")(_ => "return ")
@@ -195,7 +293,7 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
               val args = m.params.map(p => idJava.local(p.ident)).mkString(", ")
               val meth = idJava.method(m.ident)
               w.wl
-              w.wl(s"@Override")
+              if (!i.ext.react) w.wl(s"@Override")
               w.wl(s"public $ret $meth($params)$throwException").braced {
                 w.wl("assert !this.destroyed.get() : \"trying to use a destroyed object\";")
                 w.wl(s"${returnStmt}native_$meth(this.nativeRef${preComma(args)});")

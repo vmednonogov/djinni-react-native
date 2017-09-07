@@ -78,17 +78,34 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
     refs.privHeader.add("!#include " + q(spec.objcppIncludeCppPrefix + spec.cppFileIdentStyle(ident) + "." + spec.cppHeaderExt))
     refs.body.add("!#import " + q(spec.objcppIncludeObjcPrefix + headerName(ident)))
     refs.body.add("!#import " + q(spec.objcppIncludePrefix + objcppMarshal.privateHeaderName(ident.name)))
+    if (i.ext.react) {
+      refs.body.add("""!#import "RVReactDjinni.h"""")
+    }
 
     spec.cppNnHeader match {
       case Some(nnHdr) => refs.privHeader.add("#include " + nnHdr)
       case _ =>
     }
 
-    def writeObjcFuncDecl(method: Interface.Method, w: IndentWriter) {
+    val methodParamWriter = if (i.ext.react) react.createObjcMethodParamDefinitionWriter(idObjc, marshal) else (p: Field) => {
+      val name = idObjc.field(p.ident)
+      val variable = s"(${marshal.paramType(p.ty)})${idObjc.local(p.ident)}"
+      Seq((name, variable))
+    }
+
+    val declarationWriter = if (i.ext.react) react.createObjcppMethodDeclarationWriter(idObjc, marshal) else (method: Interface.Method) => {
       val label = if (method.static) "+" else "-"
-      val ret = objcMarshal.fqReturnType(method.ret)
-      val decl = s"$label ($ret)${idObjc.method(method.ident)}"
-      writeAlignedObjcCall(w, decl, method.params, "", p => (idObjc.field(p.ident), s"(${objcMarshal.paramType(p.ty)})${idObjc.local(p.ident)}"))
+      val ret = marshal.returnType(method.ret)
+      (s"$label ($ret)${idObjc.method(method.ident)}", "")
+    }
+
+    val definitionParamWriter = if (i.ext.react) react.createObjcppMethodParamDefinitionWriter(idObjc, objcppMarshal) else (p: Field) => {
+      objcppMarshal.toCpp(p.ty, idObjc.local(p.ident.name))
+    }
+
+    def writeObjcFuncDecl(method: Interface.Method, w: IndentWriter) {
+      val (start, end) = declarationWriter(method)
+      writeAlignedObjcCallComplex(w, start, method.params, end, methodParamWriter)
     }
 
     val helperClass = objcppMarshal.helperClass(ident)
@@ -169,6 +186,14 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
           }
           w.wl("return self;")
         }
+
+        if (i.ext.react) {
+          w.wl("+ (NSString *)moduleName")
+          w.braced {
+            w.wl(s"""return @"${ident.name}";""")
+          }
+        }
+
         for (m <- i.methods) {
           w.wl
           writeObjcFuncDecl(m, w)
@@ -189,7 +214,7 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
               })
               val ret = m.ret.fold("")(_ => "auto objcpp_result_ = ")
               val call = ret + (if (!m.static) "_cppRefHandle.get()->" else cppSelf + "::") + idCpp.method(m.ident) + "("
-              writeAlignedCall(w, call, m.params, ")", p => objcppMarshal.toCpp(p.ty, idObjc.local(p.ident.name)))
+              writeAlignedCall(w, call, m.params, ")", definitionParamWriter)
 
               w.wl(";")
               m.ret.fold()(r => w.wl(s"return ${objcppMarshal.fromCpp(r, "objcpp_result_")};"))
@@ -200,6 +225,24 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
         if (i.consts.nonEmpty) {
           w.wl
           generateObjcConstants(w, i.consts, self, ObjcConstantType.ConstMethod)
+
+          if (i.ext.react) {
+            val s = marshal.typename(ident, i)
+            w.wl("- (NSDictionary *)constantsToExport")
+            w.braced {
+              w.wl("return @{")
+              w.increase()
+              for (c <- i.consts if marshal.canBeConstVariable(c)) {
+                val variableName = c.ty.resolved.base match {
+                  case m: MPrimitive => s"@($s${idObjc.const(c.ident)})"
+                  case _ => s"$s${idObjc.const(c.ident)}"
+                }
+                w.wl(s"""@"${c.ident.name}": ${variableName},""")
+              }
+              w.decrease()
+              w.wl("};")
+            }
+          }
         }
       }
 

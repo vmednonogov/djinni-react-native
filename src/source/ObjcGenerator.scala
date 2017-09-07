@@ -20,11 +20,9 @@ import djinni.ast.Record.DerivingType
 import djinni.ast._
 import djinni.generatorTools._
 import djinni.meta._
-import djinni.syntax.Error
 import djinni.writer.IndentWriter
 
 import scala.collection.mutable
-import scala.collection.parallel.immutable
 
 class ObjcGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
 
@@ -86,12 +84,21 @@ class ObjcGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
     val self = marshal.typename(ident, i)
 
     refs.header.add("#import <Foundation/Foundation.h>")
+    if (i.ext.react) {
+      refs.header.add("#import <React/RCTBridgeModule.h>")
+    }
+
+    val methodParamWriter = if (i.ext.react) react.createObjcMethodDeclarationParamWriter(idObjc, marshal) else (p: Field) => {
+      val name = idObjc.field(p.ident)
+      val variable = s"(${marshal.paramType(p.ty)})${idObjc.local(p.ident)}"
+      Seq((name, variable))
+    }
 
     def writeObjcFuncDecl(method: Interface.Method, w: IndentWriter) {
       val label = if (method.static) "+" else "-"
       val ret = marshal.returnType(method.ret)
       val decl = s"$label ($ret)${idObjc.method(method.ident)}"
-      writeAlignedObjcCall(w, decl, method.params, "", p => (idObjc.field(p.ident), s"(${marshal.paramType(p.ty)})${idObjc.local(p.ident)}"))
+      writeAlignedObjcCallComplex(w, decl, method.params, "", methodParamWriter)
     }
 
     // Generate the header file for Interface
@@ -104,17 +111,26 @@ class ObjcGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
       }
       w.wl
       writeDoc(w, doc)
-      if (i.ext.objc) w.wl(s"@protocol $self") else w.wl(s"@interface $self : NSObject")
+      if (i.ext.react) {
+        w.wl(s"@interface $self : NSObject<RCTBridgeModule>")
+      } else if (i.ext.objc) {
+        w.wl(s"@protocol $self")
+      } else {
+        w.wl(s"@interface $self : NSObject")
+      }
+
       for (m <- i.methods) {
         w.wl
         writeDoc(w, m.doc)
         writeObjcFuncDecl(m, w)
         w.wl(";")
       }
-      for (c <- i.consts if !marshal.canBeConstVariable(c)) {
-        w.wl
-        writeDoc(w, c.doc)
-        writeObjcConstMethDecl(c, w)
+      if (!i.ext.react) {
+        for (c <- i.consts if !marshal.canBeConstVariable(c)) {
+          w.wl
+          writeDoc(w, c.doc)
+          writeObjcConstMethDecl(c, w)
+        }
       }
       w.wl
       w.wl("@end")

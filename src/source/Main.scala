@@ -16,7 +16,7 @@
 
 package djinni
 
-import java.io.{IOException, FileNotFoundException, FileInputStream, InputStreamReader, File, BufferedWriter, FileWriter}
+import java.io._
 
 import djinni.generatorTools._
 
@@ -254,7 +254,7 @@ object Main {
     } else {
       None
     }
-    val idl = try {
+    var idl = try {
       (new Parser(idlIncludePaths)).parseFile(idlFile, inFileListWriter)
     }
     catch {
@@ -267,6 +267,10 @@ object Main {
         inFileListWriter.get.close()
       }
     }
+
+    // Post-process parsed objects
+    System.out.println("Processing...")
+    idl = react.process(idl)
 
     // Resolve names in IDL file, check types.
     System.out.println("Resolving...")

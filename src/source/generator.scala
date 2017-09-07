@@ -375,6 +375,18 @@ abstract class Generator(spec: Spec)
   def writeAlignedCall(w: IndentWriter, call: String, params: Seq[Field], end: String, f: Field => String): IndentWriter =
     writeAlignedCall(w, call, params, ",", end, f)
 
+  def writeAlignedCallComplex(w: IndentWriter, call: String, params: Seq[Field], delim: String, end: String, f: Field => Seq[String]): IndentWriter = {
+    w.w(call)
+    val skipFirst = new SkipFirst
+    params.foreach(p => {
+      f(p).foreach(p => {
+        skipFirst { w.wl(delim); w.w(" " * call.length()) }
+        w.w(p)
+      })
+    })
+    w.w(end)
+  }
+
   def writeAlignedObjcCall(w: IndentWriter, call: String, params: Seq[Field], end: String, f: Field => (String, String)) = {
     w.w(call)
     val skipFirst = new SkipFirst
@@ -411,6 +423,23 @@ abstract class Generator(spec: Spec)
       w.w(normalEnumOptions(e).map(o => ident(o.ident.name)).fold("0")((acc, o) => acc + " | " + o))
       w.wl(",")
     }
+  }
+
+  def writeAlignedObjcCallComplex(w: IndentWriter, call: String, params: Seq[Field], end: String, f: Field => Seq[(String, String)]) = {
+    w.w(call)
+    val skipFirst = new SkipFirst
+    params.foreach(t => {
+      f(t).foreach(p => {
+        val (name, value) = p
+        skipFirst {
+          w.wl;
+          w.w(" " * math.max(0, call.length() - name.length));
+          w.w(name)
+        }
+        w.w(":" + value)
+      })
+    })
+    w.w(end)
   }
 
   // --------------------------------------------------------------------------

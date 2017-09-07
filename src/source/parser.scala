@@ -77,14 +77,15 @@ private object IdlParser extends RegexParsers {
     case doc~ident~typeParams~_~body => InternTypeDecl(ident, typeParams, body, doc, origin)
   }
 
-  def ext(default: Ext) = (rep1("+" ~> ident) >> checkExts) | success(default)
-  def extRecord = ext(Ext(false, false, false))
-  def extInterface = ext(Ext(true, true, true))
+  def ext(typeClass: Class[_], default: Ext) = (rep1("+" ~> ident) >> checkExts(typeClass)) | success(default)
+  def extRecord = ext(Record.getClass(), Ext(false, false, false, false))
+  def extInterface = ext(Interface.getClass(), Ext(true, true, true, false))
 
-  def checkExts(parts: List[Ident]): Parser[Ext] = {
+  def checkExts(typeClass: Class[_])(parts: List[Ident]): Parser[Ext] = {
     var foundCpp = false
     var foundJava = false
     var foundObjc = false
+    var foundReact = false
 
     for (part <- parts)
       part.name match {
@@ -100,9 +101,17 @@ private object IdlParser extends RegexParsers {
           if (foundObjc) return err("Found multiple \"o\" modifiers.")
           foundObjc = true
         }
+        case "r" => {
+          if (foundReact) return err("Found multiple \"r\" modifiers.")
+          foundReact = true
+        }
         case _ => return err("Invalid modifier \"" + part.name + "\"")
       }
-    success(Ext(foundJava, foundCpp, foundObjc))
+    if (foundReact)
+      if (foundCpp || foundJava || foundObjc) return err("Modifier \"r\" cannot be mixed with other modifiers.")
+      else if (typeClass != Interface.getClass()) return err("Modifier \"r\" is supported by interfaces only.")
+      else foundCpp = true
+    success(Ext(foundJava, foundCpp, foundObjc, foundReact))
   }
 
   def typeDef: Parser[TypeDef] = record | enum | flags | interface
