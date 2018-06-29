@@ -174,7 +174,7 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
 
           w.wl
 
-          w.w("public DemoModule(ReactApplicationContext reactContext)").braced {
+          w.w(s"public ${javaClass}(ReactApplicationContext reactContext)").braced {
             w.wl("super(reactContext);")
             w.wl(s"mModule = ${react.CONSTRUCTOR_NAME}(ReactDjinni.createReactBridge(reactContext));")
           }
