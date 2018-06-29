@@ -163,6 +163,7 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
       arcAssert(w)
 
       val objcSelf = if (i.ext.objc && i.ext.cpp) self + "CppProxy" else self
+      val moduleName = objcppMarshal.helperClass(ident)
 
       if (i.ext.cpp) {
         w.wl
@@ -190,7 +191,7 @@ class ObjcppGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
         if (i.ext.react) {
           w.wl("+ (NSString *)moduleName")
           w.braced {
-            w.wl(s"""return @"${ident.name}";""")
+            w.wl(s"""return @"${moduleName}";""")
           }
         }
 
