@@ -121,7 +121,7 @@ class ObjcGenerator(spec: Spec) extends BaseObjcGenerator(spec) {
 
       for (m <- i.methods) {
         w.wl
-        writeDoc(w, m.doc)
+        writeMethodDoc(w, m, idObjc.local)
         writeObjcFuncDecl(m, w)
         w.wl(";")
       }

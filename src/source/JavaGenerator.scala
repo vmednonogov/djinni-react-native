@@ -65,7 +65,7 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
     })
   }
 
-  def generateJavaConstants(w: IndentWriter, consts: Seq[Const]) = {
+  def generateJavaConstants(w: IndentWriter, consts: Seq[Const], forJavaInterface: Boolean) = {
 
     def writeJavaConst(w: IndentWriter, ty: TypeRef, v: Any): Unit = v match {
       case l: Long if marshal.fieldType(ty).equalsIgnoreCase("long") => w.w(l.toString + "l")
@@ -98,7 +98,11 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
       writeDoc(w, c.doc)
       javaAnnotationHeader.foreach(w.wl)
       marshal.nullityAnnotation(c.ty).foreach(w.wl)
-      w.w(s"public static final ${marshal.fieldType(c.ty)} ${idJava.const(c.ident)} = ")
+
+      // If the constants are part of a Java interface, omit the "public," "static,"
+      // and "final" specifiers.
+      val publicStaticFinalString = if (forJavaInterface) "" else "public static final "
+      w.w(s"${publicStaticFinalString}${marshal.fieldType(c.ty)} ${idJava.const(c.ident)} = ")
       writeJavaConst(w, c.ty, c.value)
       w.wl(";")
       w.wl
@@ -161,6 +165,7 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
 
       javaAnnotationHeader.foreach(w.wl)
 
+<<<<<<< HEAD
       if (i.ext.react) w.wl(s"""@ReactModule(name = "${javaClass}")""")
 
       w.w(s"${javaClassAccessModifierString}${javaClassType} class $javaClass$typeParamList$javaClassExtends").braced {
@@ -261,13 +266,59 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
             })
             marshal.nullityAnnotation(m.ret).foreach(w.wl)
             w.wl("public static native " + ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + ";")
+=======
+      // Generate an interface or an abstract class depending on whether the use
+      // of Java interfaces was requested.
+      val classPrefix = if (spec.javaGenerateInterfaces) "interface" else "abstract class"
+      val methodPrefix = if (spec.javaGenerateInterfaces) "" else "abstract "
+      val extendsKeyword = if (spec.javaGenerateInterfaces) "implements" else "extends"
+      val innerClassAccessibility = if (spec.javaGenerateInterfaces) "" else "private "
+      w.w(s"${javaClassAccessModifierString}$classPrefix $javaClass$typeParamList").braced {
+        val skipFirst = SkipFirst()
+        generateJavaConstants(w, i.consts, spec.javaGenerateInterfaces)
+
+        val throwException = spec.javaCppException.fold("")(" throws " + _)
+        for (m <- i.methods if !m.static) {
+          skipFirst { w.wl }
+          writeMethodDoc(w, m, idJava.local)
+          val ret = marshal.returnType(m.ret)
+          val params = m.params.map(p => {
+            val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+            nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
+          })
+          marshal.nullityAnnotation(m.ret).foreach(w.wl)
+          w.wl(s"public $methodPrefix" + ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + throwException + ";")
+        }
+
+        // Implement the interface's static methods as calls to CppProxy's corresponding methods.
+        for (m <- i.methods if m.static) {
+          skipFirst { w.wl }
+          writeMethodDoc(w, m, idJava.local)
+          val ret = marshal.returnType(m.ret)
+          val returnPrefix = if (ret == "void") "" else "return "
+          val params = m.params.map(p => {
+            val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+            nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
+          })
+
+          val meth = idJava.method(m.ident)
+          marshal.nullityAnnotation(m.ret).foreach(w.wl)
+          w.wl("public static "+ ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")")).braced {
+            writeAlignedCall(w, s"${returnPrefix}CppProxy.${meth}(", m.params, ");", p => idJava.local(p.ident))
+            w.wl
+>>>>>>> pr/2
           }
         }
+        
         if (i.ext.cpp) {
           w.wl
           javaAnnotationHeader.foreach(w.wl)
+<<<<<<< HEAD
           val proxyClassExtends = if (i.ext.react) "" else s" extends $javaClass$typeParamList"
           w.wl(s"private static final class CppProxy$typeParamList$proxyClassExtends").braced {
+=======
+          w.wl(s"${innerClassAccessibility}static final class CppProxy$typeParamList $extendsKeyword $javaClass$typeParamList").braced {
+>>>>>>> pr/2
             w.wl("private final long nativeRef;")
             w.wl("private final AtomicBoolean destroyed = new AtomicBoolean(false);")
             w.wl
@@ -277,16 +328,21 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
             }
             w.wl
             w.wl("private native void nativeDestroy(long nativeRef);")
-            w.wl("public void destroy()").braced {
+            w.wl("public void _djinni_private_destroy()").braced {
               w.wl("boolean destroyed = this.destroyed.getAndSet(true);")
               w.wl("if (!destroyed) nativeDestroy(this.nativeRef);")
             }
             w.wl("protected void finalize() throws java.lang.Throwable").braced {
-              w.wl("destroy();")
+              w.wl("_djinni_private_destroy();")
               w.wl("super.finalize();")
             }
 
+<<<<<<< HEAD
             for (m <- i.methods if !m.static) { // Static methods not in CppProxy
+=======
+            // Implement the interface's non-static methods.
+            for (m <- i.methods if !m.static) {
+>>>>>>> pr/2
               val ret = marshal.returnType(m.ret)
               val returnStmt = m.ret.fold("")(_ => "return ")
               val params = m.params.map(p => marshal.paramType(p.ty) + " " + idJava.local(p.ident)).mkString(", ")
@@ -299,6 +355,18 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
                 w.wl(s"${returnStmt}native_$meth(this.nativeRef${preComma(args)});")
               }
               w.wl(s"private native $ret native_$meth(long _nativeRef${preComma(params)});")
+            }
+
+            // Declare a native method for each of the interface's static methods.
+            for (m <- i.methods if m.static) {
+              skipFirst { w.wl }
+              val ret = marshal.returnType(m.ret)
+              val params = m.params.map(p => {
+                val nullityAnnotation = marshal.nullityAnnotation(p.ty).map(_ + " ").getOrElse("")
+                nullityAnnotation + marshal.paramType(p.ty) + " " + idJava.local(p.ident)
+              })
+              marshal.nullityAnnotation(m.ret).foreach(w.wl)
+              w.wl("public static native "+ ret + " " + idJava.method(m.ident) + params.mkString("(", ", ", ")") + ";")
             }
           }
         }
@@ -318,15 +386,15 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
       javaAnnotationHeader.foreach(w.wl)
       val self = marshal.typename(javaName, r)
 
-      val comparableFlag =
-        if (r.derivingTypes.contains(DerivingType.Ord)) {
-          s" implements Comparable<$self>"
-        } else {
-          ""
-        }
-      w.w(s"${javaClassAccessModifierString}${javaFinal}class ${self + javaTypeParams(params)}$comparableFlag").braced {
+      val interfaces = scala.collection.mutable.ArrayBuffer[String]()
+      if (r.derivingTypes.contains(DerivingType.Ord))
+          interfaces += s"Comparable<$self>"
+      if (spec.javaImplementAndroidOsParcelable && r.derivingTypes.contains(DerivingType.AndroidParcelable))
+          interfaces += "android.os.Parcelable"
+      val implementsSection = if (interfaces.isEmpty) "" else " implements " + interfaces.mkString(", ")
+      w.w(s"${javaClassAccessModifierString}${javaFinal}class ${self + javaTypeParams(params)}$implementsSection").braced {
         w.wl
-        generateJavaConstants(w, r.consts)
+        generateJavaConstants(w, r.consts, false)
         // Field definitions.
         for (f <- r.fields) {
           w.wl
@@ -456,6 +524,9 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
         }
         w.wl
 
+        if (spec.javaImplementAndroidOsParcelable && r.derivingTypes.contains(DerivingType.AndroidParcelable))
+          writeParcelable(w, self, r);
+
         if (r.derivingTypes.contains(DerivingType.Ord)) {
           def primitiveCompare(ident: Ident) {
             w.wl(s"if (this.${idJava.field(ident)} < other.${idJava.field(ident)}) {").nested {
@@ -504,5 +575,152 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
 
   def javaTypeParams(params: Seq[TypeParam]): String =
     if (params.isEmpty) "" else params.map(p => idJava.typeParam(p.ident)).mkString("<", ", ", ">")
+
+  def writeParcelable(w: IndentWriter, self: String, r: Record) = {
+    // Generates the methods and the constructor to implement the interface android.os.Parcelable
+
+    // CREATOR
+    w.wl
+    w.wl(s"public static final android.os.Parcelable.Creator<$self> CREATOR")
+    w.w(s"    = new android.os.Parcelable.Creator<$self>()").bracedSemi {
+      w.wl("@Override")
+      w.w(s"public $self createFromParcel(android.os.Parcel in)").braced {
+        w.wl(s"return new $self(in);")
+      }
+      w.wl
+      w.wl("@Override")
+      w.w(s"public $self[] newArray(int size)").braced {
+        w.wl(s"return new $self[size];")
+      }
+    }
+
+    // constructor (Parcel)
+    def deserializeField(f: Field, m: Meta, inOptional: Boolean) {
+      m match {
+        case MString => w.wl(s"this.${idJava.field(f.ident)} = in.readString();")
+        case MBinary => {
+          w.wl(s"this.${idJava.field(f.ident)} = in.createByteArray();")
+        }
+        case MDate => w.wl(s"this.${idJava.field(f.ident)} = new ${marshal.typename(f.ty)}(in.readLong());")
+        case t: MPrimitive => t.jName match {
+          case "short" => w.wl(s"this.${idJava.field(f.ident)} = (short)in.readInt();")
+          case "int" => w.wl(s"this.${idJava.field(f.ident)} = in.readInt();")
+          case "long" => w.wl(s"this.${idJava.field(f.ident)} = in.readLong();")
+          case "byte" => w.wl(s"this.${idJava.field(f.ident)} = in.readByte();")
+          case "boolean" => w.wl(s"this.${idJava.field(f.ident)} = in.readByte() != 0;")
+          case "float" => w.wl(s"this.${idJava.field(f.ident)} = in.readFloat();")
+          case "double" => w.wl(s"this.${idJava.field(f.ident)} = in.readDouble();")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case df: MDef => df.defType match {
+          case DRecord => w.wl(s"this.${idJava.field(f.ident)} = new ${marshal.typename(f.ty)}(in);")
+          case DEnum => w.wl(s"this.${idJava.field(f.ident)} = ${marshal.typename(f.ty)}.values()[in.readInt()];")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case e: MExtern => e.defType match {
+          case DRecord => w.wl(s"this.${idJava.field(f.ident)} = ${e.java.readFromParcel.format(marshal.typename(f.ty))};")
+          case DEnum => w.wl(s"this.${idJava.field(f.ident)} = ${marshal.typename(f.ty)}.values()[in.readInt()];")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case MList => {
+          w.wl(s"this.${idJava.field(f.ident)} = new ${marshal.typename(f.ty)}();")
+          w.wl(s"in.readList(this.${idJava.field(f.ident)}, getClass().getClassLoader());")
+        }
+        case MSet =>  {
+          val collectionTypeName = marshal.typename(f.ty).replaceFirst("HashSet<(.*)>", "$1")
+          w.wl(s"ArrayList<${collectionTypeName}> ${idJava.field(f.ident)}Temp = new ArrayList<${collectionTypeName}>();")
+          w.wl(s"in.readList(${idJava.field(f.ident)}Temp, getClass().getClassLoader());")
+          w.wl(s"this.${idJava.field(f.ident)} = new ${marshal.typename(f.ty)}(${idJava.field(f.ident)}Temp);")
+        }
+        case MMap => {
+          w.wl(s"this.${idJava.field(f.ident)} = new ${marshal.typename(f.ty)}();")
+          w.wl(s"in.readMap(this.${idJava.field(f.ident)}, getClass().getClassLoader());")
+        }
+        case MOptional => {
+          if (inOptional)
+          	throw new AssertionError("nested optional?")
+          w.wl("if (in.readByte() == 0) {").nested {
+            w.wl(s"this.${idJava.field(f.ident)} = null;")
+          }
+          w.wl("} else {").nested {
+            deserializeField(f, f.ty.resolved.args.head.base, true)
+          }
+          w.wl("}")
+        }
+        case _ => throw new AssertionError("Unreachable")
+      }
+    }
+    w.wl
+    w.w(s"public $self(android.os.Parcel in)").braced {
+      for (f <- r.fields)
+        deserializeField(f, f.ty.resolved.base, false)
+    }
+
+    // describeContents
+    w.wl
+    w.wl("@Override")
+    w.w("public int describeContents()").braced {
+      w.wl("return 0;")
+    }
+
+    // writeToParcel
+    def serializeField(f: Field, m: Meta, inOptional: Boolean) {
+      m match {
+        case MString => w.wl(s"out.writeString(this.${idJava.field(f.ident)});")
+        case MBinary => {
+          w.wl(s"out.writeByteArray(this.${idJava.field(f.ident)});")
+        }
+        case MDate => w.wl(s"out.writeLong(this.${idJava.field(f.ident)}.getTime());")
+        case t: MPrimitive => t.jName match {
+          case "short" | "int" => w.wl(s"out.writeInt(this.${idJava.field(f.ident)});")
+          case "long" => w.wl(s"out.writeLong(this.${idJava.field(f.ident)});")
+          case "byte" => w.wl(s"out.writeByte(this.${idJava.field(f.ident)});")
+          case "boolean" => w.wl(s"out.writeByte(this.${idJava.field(f.ident)} ? (byte)1 : 0);")
+          case "float" => w.wl(s"out.writeFloat(this.${idJava.field(f.ident)});")
+          case "double" => w.wl(s"out.writeDouble(this.${idJava.field(f.ident)});")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case df: MDef => df.defType match {
+          case DRecord => w.wl(s"this.${idJava.field(f.ident)}.writeToParcel(out, flags);")
+          case DEnum => w.wl(s"out.writeInt(this.${idJava.field(f.ident)}.ordinal());")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case e: MExtern => e.defType match {
+          case DRecord => w.wl(e.java.writeToParcel.format(idJava.field(f.ident)) + ";")
+          case DEnum => w.wl(s"out.writeInt((int)this.${idJava.field(f.ident)});")
+          case _ => throw new AssertionError("Unreachable")
+        }
+        case MList => {
+          w.wl(s"out.writeList(this.${idJava.field(f.ident)});")
+        }
+        case MSet => {
+          val collectionTypeName = marshal.typename(f.ty).replaceFirst("HashSet<(.*)>", "$1")
+          w.wl(s"out.writeList(new ArrayList<${collectionTypeName}>(this.${idJava.field(f.ident)}));")
+        }
+        case MMap => w.wl(s"out.writeMap(this.${idJava.field(f.ident)});")
+        case MOptional => {
+          if (inOptional)
+          	throw new AssertionError("nested optional?")
+          w.wl(s"if (this.${idJava.field(f.ident)} != null) {").nested {
+            w.wl("out.writeByte((byte)1);")
+            serializeField(f, f.ty.resolved.args.head.base, true)
+          }
+          w.wl("} else {").nested {
+            w.wl("out.writeByte((byte)0);")
+          }
+          w.wl("}")
+        }
+        case _ => throw new AssertionError("Unreachable")
+      }
+    }
+
+    w.wl
+    w.wl("@Override")
+    w.w("public void writeToParcel(android.os.Parcel out, int flags)").braced {
+      for (f <- r.fields)
+        serializeField(f, f.ty.resolved.base, false)
+    }
+    w.wl
+  }
 
 }

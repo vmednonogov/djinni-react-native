@@ -492,6 +492,71 @@ integers are not included because they are not available in Java.
 ## Test Suite
 Run `make test` to invoke the test suite, found in the test-suite subdirectory. It will build and run Java code on a local JVMy, plus Objective-C on an iOS simulator.  The latter will only work on a Mac with Xcode.
 
+## Generate a standalone jar
+
+The `djinni_jar` target of the main `Makefile` creates a standalone `.jar`. 
+This uses the [sbt assembly plugin](https://github.com/sbt/sbt-assembly) under the hoods.
+
+Simply call this target from the root directory:
+```shell
+make djinni_jar
+```
+This will produce a `.jar` file inside the `src/target/scala_<SCALA_VERSION>/djinni-assembly-<VERSION>.jar`.
+
+You can move and use it as any other executable `.jar`.
+
+Assuming the `.jar` is located at `$DJINNI_JAR_DIR` its version equals `0.1-SNAPSHOT`:
+```shell
+# Example
+java -jar $DJINNI_JAR_DIR/djinni-assembly-0.1-SNAPSHOT.jar \
+    --java-out "$temp_out/java" \
+    --java-package $java_package \
+    --java-class-access-modifier "package" \
+    --java-nullable-annotation "javax.annotation.CheckForNull" \
+    --java-nonnull-annotation "javax.annotation.Nonnull" \
+    --ident-java-field mFooBar \
+    \
+    --cpp-out "$temp_out/cpp" \
+    --cpp-namespace textsort \
+    --ident-cpp-enum-type foo_bar \
+    \
+    --jni-out "$temp_out/jni" \
+    --ident-jni-class NativeFooBar \
+    --ident-jni-file NativeFooBar \
+    \
+    --objc-out "$temp_out/objc" \
+    --objcpp-out "$temp_out/objc" \
+    --objc-type-prefix TXS \
+    --objc-swift-bridging-header "TextSort-Bridging-Header" \
+    \
+    --idl "$in"
+```
+
+*Note*: The `all` target of the main `Makefile` includes the `djinni_jar` target.
+
+## Generate an iOS universal binary of the support library.
+
+The `ios-build-support-lib.sh` helps you to build an universal static library for iOS platforms.
+It uses the platform file of the [ios-cmake](https://github.com/leetal/ios-cmake) repository.
+
+It basically creates one universal static library per `IOS_PLATFORM` variable and uses `lipo` 
+to merge all the files in one.
+
+There is basically two variables you would like to modify:
+
+- `BUILD_APPLE_ARCHITECTURES`: Specifies which `IOS_PLATFORM` to build.
+For more informations, take a look at https://github.com/leetal/ios-cmake.
+
+- `ENABLE_BITCODE`: enable/disable the bitcode generation.
+
+## Android Parcelable records
+
+Djinni supports generating records that implements `android.os.parcelable`.
+
+In order to do that, there are two steps needed:
+- deriving the records that should be parcelable with the keyword parcelable: `deriving(parcelable)`
+- run Djinni with the following flag `--java-implement-android-os-parcelable true`
+
 ## Community Links
 
 * Join the discussion with other developers at the [Mobile C++ Slack Community](https://mobilecpp.herokuapp.com/)

@@ -5,12 +5,33 @@ package com.rushingvise.reactcpp;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+<<<<<<< HEAD:support-lib/java/com/rushingvise/reactcpp/JobQueue.java
 public abstract class JobQueue {
     public abstract Job poll();
 
     public abstract void interruptPoll();
 
     private static final class CppProxy extends JobQueue
+=======
+/*package*/ interface SortItems {
+    /** For the iOS / Android demo */
+    public void sort(@Nonnull SortOrder order, @Nonnull ItemList items);
+
+    @CheckForNull
+    public static SortItems createWithListener(@CheckForNull TextboxListener listener)
+    {
+        return CppProxy.createWithListener(listener);
+    }
+
+    /** For the localhost / command-line demo */
+    @Nonnull
+    public static ItemList runSort(@Nonnull ItemList items)
+    {
+        return CppProxy.runSort(items);
+    }
+
+    static final class CppProxy implements SortItems
+>>>>>>> pr/2:example/generated-src/java/com/dropbox/textsort/SortItems.java
     {
         private final long nativeRef;
         private final AtomicBoolean destroyed = new AtomicBoolean(false);
@@ -22,14 +43,14 @@ public abstract class JobQueue {
         }
 
         private native void nativeDestroy(long nativeRef);
-        public void destroy()
+        public void _djinni_private_destroy()
         {
             boolean destroyed = this.destroyed.getAndSet(true);
             if (!destroyed) nativeDestroy(this.nativeRef);
         }
         protected void finalize() throws java.lang.Throwable
         {
-            destroy();
+            _djinni_private_destroy();
             super.finalize();
         }
 
@@ -47,6 +68,16 @@ public abstract class JobQueue {
             assert !this.destroyed.get() : "trying to use a destroyed object";
             native_interruptPoll(this.nativeRef);
         }
+<<<<<<< HEAD:support-lib/java/com/rushingvise/reactcpp/JobQueue.java
         private native void native_interruptPoll(long _nativeRef);
+=======
+        private native void native_sort(long _nativeRef, SortOrder order, ItemList items);
+
+        @CheckForNull
+        public static native SortItems createWithListener(@CheckForNull TextboxListener listener);
+
+        @Nonnull
+        public static native ItemList runSort(@Nonnull ItemList items);
+>>>>>>> pr/2:example/generated-src/java/com/dropbox/textsort/SortItems.java
     }
 }

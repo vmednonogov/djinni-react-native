@@ -42,8 +42,10 @@ object Main {
     var javaClassAccessModifier: JavaAccessModifier.Value = JavaAccessModifier.Public
     var javaCppException: Option[String] = None
     var javaAnnotation: Option[String] = None
+    var javaGenerateInterfaces: Boolean = false
     var javaNullableAnnotation: Option[String] = None
     var javaNonnullAnnotation: Option[String] = None
+    var javaImplementAndroidOsParcelable : Boolean = false
     var javaUseFinalForRecord: Boolean = true
     var jniOutFolder: Option[File] = None
     var jniHeaderOutFolderOptional: Option[File] = None
@@ -68,7 +70,7 @@ object Main {
     var objcTypePrefix: String = ""
     var objcIncludePrefix: String = ""
     var objcExtendedRecordIncludePrefix: String = ""
-    var objcSwiftBridgingHeader: Option[String] = None
+    var objcSwiftBridgingHeaderName: Option[String] = None
     var objcppIncludePrefix: String = ""
     var objcppIncludeCppPrefix: String = ""
     var objcppIncludeObjcPrefixOptional: Option[String] = None
@@ -81,7 +83,7 @@ object Main {
     var yamlOutFolder: Option[File] = None
     var yamlOutFile: Option[String] = None
     var yamlPrefix: String = ""
-	
+
     val argParser = new scopt.OptionParser[Unit]("djinni") {
 
       def identStyle(optionName: String, update: IdentConverter => Unit) = {
@@ -110,10 +112,14 @@ object Main {
         .text("The type for translated C++ exceptions in Java (default: java.lang.RuntimeException that is not checked)")
       opt[String]("java-annotation").valueName("<annotation-class>").foreach(x => javaAnnotation = Some(x))
         .text("Java annotation (@Foo) to place on all generated Java classes")
+      opt[Boolean]("java-generate-interfaces").valueName("<true/false>").foreach(x => javaGenerateInterfaces = x)
+        .text("Whether Java interfaces should be used instead of abstract classes where possible (default: false).")
       opt[String]("java-nullable-annotation").valueName("<nullable-annotation-class>").foreach(x => javaNullableAnnotation = Some(x))
         .text("Java annotation (@Nullable) to place on all fields and return values that are optional")
       opt[String]("java-nonnull-annotation").valueName("<nonnull-annotation-class>").foreach(x => javaNonnullAnnotation = Some(x))
         .text("Java annotation (@Nonnull) to place on all fields and return values that are not optional")
+      opt[Boolean]("java-implement-android-os-parcelable").valueName("<true/false>").foreach(x => javaImplementAndroidOsParcelable = x)
+        .text("all generated java classes will implement the interface android.os.Parcelable")
       opt[Boolean]("java-use-final-for-record").valueName("<use-final-for-record>").foreach(x => javaUseFinalForRecord = x)
         .text("Whether generated Java classes for records should be marked 'final' (default: true). ")
       note("")
@@ -165,7 +171,7 @@ object Main {
         .text("The prefix for Objective-C data types (usually two or three letters)")
       opt[String]("objc-include-prefix").valueName("<prefix>").foreach(objcIncludePrefix = _)
         .text("The prefix for #import of header files from Objective-C files.")
-      opt[String]("objc-swift-bridging-header").valueName("<name>").foreach(x => objcSwiftBridgingHeader = Some(x))
+      opt[String]("objc-swift-bridging-header").valueName("<name>").foreach(x => objcSwiftBridgingHeaderName = Some(x))
         .text("The name of Objective-C Bridging Header used in XCode's Swift projects.")
       note("")
       opt[File]("objcpp-out").valueName("<out-folder>").foreach(x => objcppOutFolder = Some(x))
@@ -289,8 +295,8 @@ object Main {
     } else {
       None
     }
-    val objcSwiftBridgingHeaderWriter = if (objcSwiftBridgingHeader.isDefined && objcOutFolder.isDefined) {
-      val objcSwiftBridgingHeaderFile = new File(objcOutFolder.get.getPath, objcSwiftBridgingHeader.get + ".h")
+    val objcSwiftBridgingHeaderWriter = if (objcSwiftBridgingHeaderName.isDefined && objcOutFolder.isDefined) {
+      val objcSwiftBridgingHeaderFile = new File(objcOutFolder.get.getPath, objcSwiftBridgingHeaderName.get + ".h")
       if (objcSwiftBridgingHeaderFile.getParentFile != null)
         createFolder("output file list", objcSwiftBridgingHeaderFile.getParentFile)
       Some(new BufferedWriter(new FileWriter(objcSwiftBridgingHeaderFile)))
@@ -305,8 +311,10 @@ object Main {
       javaIdentStyle,
       javaCppException,
       javaAnnotation,
+      javaGenerateInterfaces,
       javaNullableAnnotation,
       javaNonnullAnnotation,
+      javaImplementAndroidOsParcelable,
       javaUseFinalForRecord,
       cppOutFolder,
       cppHeaderOutFolder,
@@ -346,6 +354,7 @@ object Main {
       objcppNamespace,
       objcBaseLibIncludePrefix,
       objcSwiftBridgingHeaderWriter,
+      objcSwiftBridgingHeaderName,
       outFileListWriter,
       skipGeneration,
       yamlOutFolder,
