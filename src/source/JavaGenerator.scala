@@ -158,19 +158,30 @@ class JavaGenerator(spec: Spec) extends Generator(spec) {
     writeJavaFile(ident, origin, refs.java, w => {
       val javaClass = marshal.typename(ident, i)
       val typeParamList = javaTypeParams(typeParams)
-      val javaClassType = if (i.ext.react) "final" else "abstract"
-      val javaClassExtends = if (i.ext.react) " extends ReactContextBaseJavaModule" else ""
+      //\val javaClassType = if (i.ext.react) "final" else "abstract"
+      //\val javaClassExtends = if (i.ext.react) " extends ReactContextBaseJavaModule" else ""
 
       writeDoc(w, doc)
 
       javaAnnotationHeader.foreach(w.wl)
-
+           
       if (i.ext.react) w.wl(s"""@ReactModule(name = "${javaClass}")""")
-
-      w.w(s"${javaClassAccessModifierString}${javaClassType} class $javaClass$typeParamList$javaClassExtends").braced {
+      
+      // Generate an interface or an abstract class depending on whether the use
+      // of Java interfaces was requested.
+      val classPrefix = if (spec.javaGenerateInterfaces) "interface" else "abstract class"
+      val methodPrefix = if (spec.javaGenerateInterfaces) "" else "abstract "
+      val extendsKeyword = if (spec.javaGenerateInterfaces) "implements" else "extends"
+      val innerClassAccessibility = if (spec.javaGenerateInterfaces) "" else "private "
+      w.w(s"${javaClassAccessModifierString}$classPrefix $javaClass$typeParamList").braced {
         val skipFirst = SkipFirst()
+        generateJavaConstants(w, i.consts, spec.javaGenerateInterfaces)
 
-        generateJavaConstants(w, i.consts)
+
+      //\w.w(s"${javaClassAccessModifierString}${javaClassType} class $javaClass$typeParamList$javaClassExtends").braced {
+        //\val skipFirst = SkipFirst()
+
+        //\generateJavaConstants(w, i.consts)
 
         val throwException = spec.javaCppException.fold("")(" throws " + _)
         if (i.ext.react) {
