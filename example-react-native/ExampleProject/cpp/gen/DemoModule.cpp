@@ -7,8 +7,8 @@ std::string const DemoModule::EVENT_NAME = {"DEMO_MODULE_EVENT"};
 
 std::string const DemoModule::STRING_CONSTANT = {"STRING"};
 
-int32_t const DemoModule::INT_CONSTANT = 13;
+int32_t constexpr DemoModule::INT_CONSTANT;
 
-double const DemoModule::DOUBLE_CONSTANT = 13.123;
+double constexpr DemoModule::DOUBLE_CONSTANT;
 
-bool const DemoModule::BOOL_CONSTANT = false;
+bool constexpr DemoModule::BOOL_CONSTANT;

@@ -20,11 +20,11 @@ public:
 
     static std::string const STRING_CONSTANT;
 
-    static int32_t const INT_CONSTANT;
+    static constexpr int32_t INT_CONSTANT = 13;
 
-    static double const DOUBLE_CONSTANT;
+    static constexpr double DOUBLE_CONSTANT = 13.123;
 
-    static bool const BOOL_CONSTANT;
+    static constexpr bool BOOL_CONSTANT = false;
 
     static std::shared_ptr<DemoModule> create(const std::shared_ptr<::ReactBridge> & bridge);
 

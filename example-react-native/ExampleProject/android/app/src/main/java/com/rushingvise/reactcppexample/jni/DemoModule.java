@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @ReactModule(name = "DemoModule")
-public final class DemoModule extends ReactContextBaseJavaModule {
+public abstract class DemoModule {
     public static final String EVENT_NAME = "DEMO_MODULE_EVENT";
 
     public static final String STRING_CONSTANT = "STRING";
@@ -100,7 +100,7 @@ public final class DemoModule extends ReactContextBaseJavaModule {
         mModule.testEventWithMap(ReactDjinni.wrap(value));
     }
 
-    private static final class CppProxy
+    private static final class CppProxy extends DemoModule
     {
         private final long nativeRef;
         private final AtomicBoolean destroyed = new AtomicBoolean(false);
@@ -112,14 +112,14 @@ public final class DemoModule extends ReactContextBaseJavaModule {
         }
 
         private native void nativeDestroy(long nativeRef);
-        public void destroy()
+        public void _djinni_private_destroy()
         {
             boolean destroyed = this.destroyed.getAndSet(true);
             if (!destroyed) nativeDestroy(this.nativeRef);
         }
         protected void finalize() throws java.lang.Throwable
         {
-            destroy();
+            _djinni_private_destroy();
             super.finalize();
         }
 
@@ -185,5 +185,6 @@ public final class DemoModule extends ReactContextBaseJavaModule {
             native_testEventWithMap(this.nativeRef, value);
         }
         private native void native_testEventWithMap(long _nativeRef, com.rushingvise.reactcpp.JavascriptMap value);
+        public static native DemoModule create(com.rushingvise.reactcpp.ReactBridge bridge);
     }
 }

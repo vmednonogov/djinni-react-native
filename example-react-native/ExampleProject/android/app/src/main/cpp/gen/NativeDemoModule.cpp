@@ -24,7 +24,7 @@ CJNIEXPORT void JNICALL Java_com_rushingvise_reactcppexample_jni_DemoModule_0002
     } JNI_TRANSLATE_EXCEPTIONS_RETURN(jniEnv, )
 }
 
-CJNIEXPORT jobject JNICALL Java_com_rushingvise_reactcppexample_jni_DemoModule_create(JNIEnv* jniEnv, jobject /*this*/, ::djinni_generated::NativeReactBridge::JniType j_bridge)
+CJNIEXPORT jobject JNICALL Java_com_rushingvise_reactcppexample_jni_DemoModule_00024CppProxy_create(JNIEnv* jniEnv, jobject /*this*/, ::djinni_generated::NativeReactBridge::JniType j_bridge)
 {
     try {
         DJINNI_FUNCTION_PROLOGUE0(jniEnv);
